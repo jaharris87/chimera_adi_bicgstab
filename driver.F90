@@ -1,5 +1,6 @@
 program driver
   use, intrinsic :: iso_fortran_env, only: dp=>real64, lu_stdout=>output_unit
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
   use gpu_module, only: initialize_gpu, finalize_gpu
   use mpi
 
@@ -94,6 +95,7 @@ program driver
 
     call adi_bicgstab( m, nb, A, B, C, rhs, 10, 1.d-10, iters )
     if ( myrank == 0 ) write(lu_stdout,'(a,i3,a,es23.15)') "it = ", it, ", ||rhs|| = ",NORM2(rhs)
+    if ( ieee_is_nan( NORM2(rhs) ) ) write(lu_stdout,'(a,i3,a,i3,a,es23.15)') "it = ",it,", myrank = ",myrank,", ||rhs|| = ",NORM2(rhs)
 
   end do
 
