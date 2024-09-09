@@ -10,7 +10,7 @@ The structure of the reproducer is as follows (see `driver.F90`):
 5. Allocate GPU memory (see `pre_adi_init` in `adi_solver_GPU.c`)
 6. Repeatedly (30 times) try to solve the system using `adi_bicgstab`, re-initializing the data for each attempt
 
-===
+---
 
 Build instructions for Frontier:
 
