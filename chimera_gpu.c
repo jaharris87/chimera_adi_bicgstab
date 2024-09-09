@@ -18,6 +18,10 @@ int nmagma_queue;
 int deviceCount;
 int mydevice;
 int myid;
+int my_gpu_mpi_rank;  // HPE
+int *gpu_win_data;    // HPE
+MPI_Comm gpu_comm;    // HPE
+MPI_Win gpu_win;      // HPE
 magma_device_t magma_device;
 
 gpuStream_t *streamArray;
@@ -31,6 +35,7 @@ int nevent;
 void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
                        int *ngpublas_handle_f, int *ngpusparse_handle_f, int *nmagma_queue_f, 
                        int *nstream_f, int* nevent_f,
+                       int *my_gpu_mpi_rank_f, MPI_Win *gpu_win_f,
                        gpublasHandle_t **gpublas_handle_array_f,
                        gpusparseHandle_t **gpusparse_handle_array_f,
                        magma_queue_t **magma_queue_array_f,
@@ -39,11 +44,136 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
 {
    int i;
    int ierr = MPI_Comm_rank( MPI_COMM_WORLD, &myid );
+// HPE: begin section 1 of 2 of changes to allow for serialization of MPI calls per GPU
+   char my_host_name[MPI_MAX_PROCESSOR_NAME];
+   char *me = "initialize_gpu_c", *err_str = NULL;
+   const int IC0 = (int) '0', MIN_GPU_ID = 0, MAX_GPU_ID = 7;
+   int err_str_len = -1, found = -1, ic = -1, len = -1, my_commu_id = -1, my_gpu_id = -1
+     , my_host_num = -1, num_gpu_mpi_ranks = -1, rc = -1, rc2 = -1;
+// HPE: end section 1 of 2 of changes to allow for serialization of MPI calls per GPU
 
    GPU_CALL( gpuGetDeviceCount( &deviceCount ) );
    mydevice = myid % deviceCount;
    GPU_CALL( gpuSetDevice( mydevice ) );
    magma_getdevice( &magma_device );
+
+// HPE: begin section 2 of 2 of changes to allow for serialization of MPI calls per GPU
+   err_str = (char*) malloc( MPI_MAX_ERROR_STRING );
+   if ( ! err_str )
+   {  fprintf( stderr, "%s error: 'malloc( MPI_MAX_ERROR_STRING ) failed.\n", me );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   rc = MPI_Get_processor_name( my_host_name, &len );
+   if ( rc != MPI_SUCCESS )
+   {  rc2 = MPI_Error_string( rc , err_str, &err_str_len );
+      if ( rc2 == MPI_SUCCESS )
+      {  fprintf( stderr, "%s error: MPI_Get_processor_name failed with rc = %d = '%s'.\n", me, rc, err_str ); }
+      else
+      {  fprintf( stderr, "%s error: MPI_Get_processor_name failed with rc = %d (no MPI_Error_string).\n", me, rc ); }
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   found = 0;  // number of decimal digits found in my_host_name
+   my_host_num = 0;
+   for( i = 0; i < len; i++ )  // len = length( my_host_name[] )
+   {  ic = ((int) my_host_name[i]) - IC0;
+      if ( ic >= 0 && ic <= 9 )
+      {  my_host_num *= 10;       // shift 1 decimal digit to the left
+         my_host_num += ic;
+         found++;
+      }
+   }
+   if ( found <= 0 )
+   {  fprintf( stderr, "%s error: found no digits in my_host_name = '%s'\n", me, my_host_name );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   const char* VIS_DEVS = getenv( "ROCR_VISIBLE_DEVICES" );
+   if ( ! VIS_DEVS )
+   {  fprintf( stderr, "%s error: getenv(ROCR_VISIBLE_DEVICES) failed on MPI-rank %d.\n"
+             , me, myid );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+   len = (int) strlen( VIS_DEVS );
+   if ( len != 1 )
+   {  fprintf( stderr, "%s error: ROCR_VISIBLE_DEVICES='%s' is != 1 char long on MPI-rank %d.\n"
+             , me, VIS_DEVS, myid );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+   my_gpu_id = ((int) VIS_DEVS[0]) - IC0;
+   if ( my_gpu_id < MIN_GPU_ID || my_gpu_id > MAX_GPU_ID )
+   {  fprintf( stderr, "%s error: my_gpu_id = %d is out of range [%d,%d] on MPI-rank %d in ROCR_VISIBLE_DEVICES='%s'.\n"
+             , me, my_gpu_id, MIN_GPU_ID, MAX_GPU_ID, myid, VIS_DEVS );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   // Q: Should we use mydevice or my_gpu_id for my_commu_id?
+   // my_commu_id = my_host_num * 10 + mydevice;
+      my_commu_id = my_host_num * 10 + my_gpu_id;  // my_gpu_id = atoi( getenv ( "ROCR_VISIBLE_DEVICES" ) )
+   fprintf( stderr
+          , "%s info: my_commu_id=%d on MPI-rank=%d based on HOSTNAME='%s' and ROCR_VISIBLE_DEVICES='%s'.\n"
+          , me, my_commu_id, myid, my_host_name, VIS_DEVS );
+
+   // color = my_commu_id is shared by all MPI-ranks using the same GPU;
+   // key = myid (= 0, 1, 2, ... in MPI_COMM_WORLD) determines the rank order
+   //       in gpu_comm, regardless of what MPI-ranks of MPI_COMM_WORLD are
+   //       on the GPU which is system-wide uniquely identified by my_commu_id;
+   rc = MPI_Comm_split( MPI_COMM_WORLD, my_commu_id, myid, &gpu_comm );
+   if ( rc != MPI_SUCCESS )
+   {  rc2 = MPI_Error_string( rc , err_str, &err_str_len );
+      if ( rc2 == MPI_SUCCESS )
+      {  fprintf( stderr, "%s error: MPI_Comm_split failed for gpu_comm with rc = %d = '%s'.\n", me, rc, err_str ); }
+      else
+      {  fprintf( stderr, "%s error: MPI_Comm_split failed for gpu_comm with rc = %d (no MPI_Error_string).\n", me, rc ); }
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   rc = MPI_Comm_rank( gpu_comm, &my_gpu_mpi_rank );  // if (7 MPI-ranks/GPU) then my_gpu_mpi_rank in [0,6];
+   if ( rc != MPI_SUCCESS )
+   {  rc2 = MPI_Error_string( rc , err_str, &err_str_len );
+      if ( rc2 == MPI_SUCCESS )
+      {  fprintf( stderr, "%s error: MPI_Comm_rank failed for gpu_comm with rc = %d = '%s'.\n", me, rc, err_str ); }
+      else
+      {  fprintf( stderr, "%s error: MPI_Comm_rank failed for gpu_comm with rc = %d (no MPI_Error_string).\n", me, rc ); }
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   rc = MPI_Comm_size( gpu_comm , &num_gpu_mpi_ranks );
+   if ( rc != MPI_SUCCESS )
+   {  rc2 = MPI_Error_string( rc , err_str, &err_str_len );
+      if ( rc2 == MPI_SUCCESS )
+      {  fprintf( stderr, "%s error: MPI_Comm_size failed for gpu_comm with rc = %d = '%s'.\n", me, rc, err_str ); }
+      else
+      {  fprintf( stderr, "%s error: MPI_Comm_size failed for gpu_comm with rc = %d (no MPI_Error_string).\n", me, rc ); }
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   printf( "%s info: my_commu_id = %d , myid = %d , my_gpu_mpi_rank = %d , num_gpu_mpi_ranks = %d\n"
+         ,  me,      my_commu_id      , myid      , my_gpu_mpi_rank      , num_gpu_mpi_ranks );
+
+   gpu_win_data = (int*) malloc( sizeof(int) * num_gpu_mpi_ranks );
+   if ( ! gpu_win_data )
+   {  fprintf( stderr, "%s error: MPI-rank %d failed to malloc %ld bytes for gpu_win_data.\n"
+             , me, myid, sizeof(int) * num_gpu_mpi_ranks );
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+   for( i = 0; i < num_gpu_mpi_ranks; i++ ) { gpu_win_data[i] = 0; }
+   
+   // MPI_Win_create(void *base, MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm, MPI_Win *win)
+   rc = MPI_Win_create( (void*) gpu_win_data, (MPI_Aint) (sizeof(int) * num_gpu_mpi_ranks)
+                      , sizeof(int), MPI_INFO_NULL, gpu_comm, &gpu_win );
+   if ( rc != MPI_SUCCESS )
+   {  rc2 = MPI_Error_string( rc , err_str, &err_str_len );
+      if ( rc2 == MPI_SUCCESS )
+      {  fprintf( stderr, "%s error: MPI_Win_create failed for gpu_comm with rc = %d = '%s'.\n", me, rc, err_str ); }
+      else
+      {  fprintf( stderr, "%s error: MPI_Win_create failed for gpu_comm with rc = %d (no MPI_Error_string).\n", me, rc ); }
+      MPI_Abort( MPI_COMM_WORLD, -1 );
+   }
+
+   if ( err_str ) { free( err_str ); err_str = NULL; }
+// HPE: end section 2 of 2 of changes to allow for serialization of MPI calls per GPU
 
    nstream = 1;
    ngpublas_handle = nstream;
@@ -126,6 +256,8 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
    *nmagma_queue_f = nmagma_queue;
    *nstream_f = nstream;
    *nevent_f = nevent;
+   *my_gpu_mpi_rank_f = my_gpu_mpi_rank;
+   *gpu_win_f = gpu_win;
    *gpublas_handle_array_f = gpublas_handle_array;
    *gpusparse_handle_array_f = gpusparse_handle_array;
    *magma_queue_array_f = magma_queue_array;
@@ -164,6 +296,13 @@ void finalize_gpu_c()
 
    MAGMA_CALL( magma_finalize() );
 
+// HPE: begin section of changes to allow for serialization of MPI calls per GPU
+   MPI_Win_free( &gpu_win );
+   if ( gpu_win_data )
+   {  free( gpu_win_data );
+      gpu_win_data = NULL;
+   }
+// HPE: end section of changes to allow for serialization of MPI calls per GPU
 }
 
 gpuError_t gpuMalloc

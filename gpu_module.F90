@@ -16,6 +16,8 @@ MODULE gpu_module
 
   INTEGER :: mydevice
   INTEGER :: deviceCount
+  INTEGER :: my_gpu_mpi_rank  ! HPE
+  INTEGER :: gpu_win          ! HPE
 
 !-----------------------------------------------------------------------
 ! Function Interfaces
@@ -25,6 +27,7 @@ MODULE gpu_module
 
     SUBROUTINE initialize_gpu_c( mydevice, deviceCount, &
         & nhipblas_handle, nhipsparse_handle, nmagma_queue, nstream, nevent,  &
+        & my_gpu_mpi_rank, gpu_win, &
         & hipblas_handle_array_cptr, hipsparse_handle_array_cptr, magma_queue_array_cptr, &
         & streamArray_cptr, eventArray_cptr ) &
         & BIND(C, NAME="initialize_gpu_c")
@@ -36,6 +39,8 @@ MODULE gpu_module
       INTEGER(C_INT) :: nmagma_queue
       INTEGER(C_INT) :: nstream
       INTEGER(C_INT) :: nevent
+      INTEGER(C_INT) :: my_gpu_mpi_rank
+      INTEGER(C_INT) :: gpu_win
       TYPE(C_PTR) :: hipblas_handle_array_cptr
       TYPE(C_PTR) :: hipsparse_handle_array_cptr
       TYPE(C_PTR) :: magma_queue_array_cptr
@@ -97,6 +102,7 @@ CONTAINS
 
     CALL initialize_gpu_c( mydevice, deviceCount, &
       & ngpublas_handle, ngpusparse_handle, nmagma_queue, nstream, nevent,  &
+      & my_gpu_mpi_rank, gpu_win, &
       & gpublas_handle_array_cptr, gpusparse_handle_array_cptr, magma_queue_array_cptr, &
       & streamArray_cptr, eventArray_cptr )
 

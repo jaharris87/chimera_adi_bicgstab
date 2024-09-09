@@ -126,6 +126,11 @@ extern int nmagma_queue;
 extern int deviceCount;
 extern int mydevice;
 extern int myid;
+extern int my_gpu_mpi_rank;  // HPE
+extern int *gpu_win_data;    // HPE
+extern MPI_Comm gpu_comm;    // HPE
+extern MPI_Win gpu_win;      // HPE
+
 extern magma_device_t magma_device;
 
 #ifdef __cplusplus
@@ -135,6 +140,7 @@ extern "C" {
 void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
                        int *ngpublas_handle_f, int *ngpusparse_handle_f, int *nmagma_queue_f, 
                        int *nstream_f, int* nevent_f,
+                       int *my_gpu_mpi_rank_f, MPI_Win *gpu_win_f,
                        gpublasHandle_t **gpublas_handle_array_f,
                        gpusparseHandle_t **gpusparse_handle_array_f,
                        magma_queue_t **magma_queue_array_f,

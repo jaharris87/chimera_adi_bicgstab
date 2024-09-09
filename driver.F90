@@ -1,6 +1,6 @@
 program driver
   use, intrinsic :: iso_fortran_env, only: dp=>real64, lu_stdout=>output_unit
-  use gpu_module, only: initialize_gpu, finalize_gpu
+  use gpu_module, only: initialize_gpu, finalize_gpu, my_gpu_mpi_rank, gpu_win
   use mpi
 
   use adi_c_module, only: adi_bicgstab, pre_adi_init
@@ -92,8 +92,15 @@ program driver
       end do
     end do
 
+    ! HPE : begin MPI-serialization per GPU - serialization-loop
+    call mpi_win_lock( MPI_LOCK_EXCLUSIVE, 0, 0, gpu_win, ierr )
+    if ( ierr /= MPI_SUCCESS ) call mpi_abort( MPI_COMM_WORLD, -7, ierr )
+
     call adi_bicgstab( m, nb, A, B, C, rhs, 10, 1.d-10, iters )
     if ( myrank == 0 ) write(lu_stdout,'(a,i3,a,es23.15)') "it = ", it, ", ||rhs|| = ",NORM2(rhs)
+
+    call mpi_win_unlock( 0, gpu_win, ierr )
+    if ( ierr /= MPI_SUCCESS ) call mpi_abort( MPI_COMM_WORLD, -8, ierr )
 
   end do
 
