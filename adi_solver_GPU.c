@@ -127,7 +127,7 @@ void adi_init( int msize, int nblocks, double *A, double *B, double *C )
         for( n=0; n<msize; n++ ) {
             for( m=0; m<msize; m++ ) {
                 device_ALU[m+n*msize+iblock*msize*msize] = A[m+n*msize+iblock*msize*msize];
-                device_A[m+n*msize+iblock*msize*msize]   = A[m+n*msize+iblock*msize*msize];
+                device_A  [m+n*msize+iblock*msize*msize] = A[m+n*msize+iblock*msize*msize];
             }
         }
     }
@@ -146,24 +146,28 @@ void adi_init( int msize, int nblocks, double *A, double *B, double *C )
         }
     }
 #if defined( USE_OACC )
-    #pragma acc parallel loop gang \
+    #pragma acc parallel loop gang vector collapse(2) \
                          present( A[0:msize*msize*nblocks], B[0:msize*nblocks], C[0:msize*nblocks] ) \
                          deviceptr( device_d, device_dl, device_du )
 #elif defined( USE_OMP_OL )
-    #pragma omp target teams distribute \
+    #pragma omp target teams distribute parallel for simd collapse(2) \
                          is_device_ptr( device_d, device_dl, device_du )
 #endif
     for( m=0; m<msize; m++ ) {
-#if defined( USE_OACC )
-        #pragma acc loop vector
-#elif defined( USE_OMP_OL )
-        #pragma omp parallel for simd
-#endif
         for( iblock=0; iblock<nblocks; iblock++ ) {
             device_d[iblock+m*nblocks]  = A[m+m*msize+iblock*msize*msize];
             device_dl[iblock+m*nblocks] = B[m+iblock*msize];
             device_du[iblock+m*nblocks] = C[m+iblock*msize];
         }
+    }
+#if defined( USE_OACC )
+    #pragma acc parallel loop gang vector \
+                         deviceptr( device_dl, device_du )
+#elif defined( USE_OMP_OL )
+    #pragma omp target teams distribute parallel for simd \
+                         is_device_ptr( device_dl, device_du )
+#endif
+    for( m=0; m<msize; m++ ) {
         device_dl[m*nblocks]       = d_zero;
         device_du[(m+1)*nblocks-1] = d_zero;
     }
@@ -482,11 +486,6 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 
         // 16: v = A * \hat{p}
         adi_matvec( msize, nblocks, A, B, C, device_phat, device_vvec );
-
-#ifdef ADI_VERBOSE
-        printf( "Iteration %2da, rho = %12.5e, vvec_norm = %12.5e, phat_norm = %12.5e\n",
-                k, rho, adi_vnorm( msize, nblocks, device_vvec ), adi_vnorm( msize, nblocks, device_phat ) );
-#endif
 
         // 17: \alpha = \rho_{i} / ( \tilde{r}^{T} * v )
         rtilde_times_vvec = adi_dotprod( msize, nblocks, device_rtilde, device_vvec );

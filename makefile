@@ -8,7 +8,8 @@ USE_OMP    ?= FALSE
 USE_OMP_OL ?= TRUE
 USE_OACC   ?= FALSE
 
-MACHINE = frontier
+#MACHINE = frontier
+MACHINE = frontier_cray_amd
 -include ${MACHINE}.mak
 
 FFLAGS = ${FFLAGS_${CMODE}}

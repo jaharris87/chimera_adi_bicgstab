@@ -4,6 +4,9 @@ program driver
   use mpi
 
   use adi_c_module, only: adi_bicgstab, pre_adi_init
+
+  use ieee_arithmetic
+
   implicit none
 
   integer :: ierr, istat
@@ -19,6 +22,8 @@ program driver
 
   integer, parameter :: iter_nu=30, iter_adi=10
   real(dp), parameter :: tol=1.0e-10_dp
+
+  real(dp) :: rhs_norm
 
   ! Initialize MPI
   call mpi_init( ierr )
@@ -93,7 +98,12 @@ program driver
     end do
 
     call adi_bicgstab( m, nb, A, B, C, rhs, 10, 1.d-10, iters )
-    if ( myrank == 0 ) write(lu_stdout,'(a,i3,a,es23.15)') "it = ", it, ", ||rhs|| = ",NORM2(rhs)
+
+    rhs_norm = NORM2(rhs)
+    if ( ieee_is_nan( rhs_norm ) ) then
+      write(lu_stdout,'(a,i3,a,i3,a,es23.15)') "myid = ", myrank, ", it = ", it, ", ||rhs|| = ",NORM2(rhs)
+    end if
+    !if ( myrank == 0 ) write(lu_stdout,'(a,i3,a,es23.15)') "it = ", it, ", ||rhs|| = ",NORM2(rhs)
 
   end do
 

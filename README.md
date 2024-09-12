@@ -19,6 +19,13 @@ module load PrgEnv-cray cray-hdf5-parallel craype-accel-amd-gfx90a rocm hipfort 
 make
 ```
 
+Build instructions for Frontier with PrgEnv-cray-amd:
+
+```
+module load PrgEnv-cray cray-hdf5-parallel craype-accel-amd-gfx90a rocm hipfort magma PrgEnv-cray-amd
+make
+```
+
 Running with 1 rank per GCD (expected output):
 
 ```
