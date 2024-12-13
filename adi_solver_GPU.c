@@ -5,7 +5,7 @@
 // void setupPtrVecs(int nblocks, int msize, double **device_ALU_d, double **device_x1_d, double *device_ALU, double *device_x1);
 // void residual(int nblocks, int msize, double *device_dx, double *device_rtilde, double *device_pvec, double *device_rvec, double *device_xvec, double *rhs);
 // double adi_vnorm( int msize, int nblocks, double *d_xvec );
-double adi_dotprod_remote( int msize, int nblocks, double *d_xvec, double *d_yvec );
+double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec );
 
 void pre_adi_init( int nblocks, int msize )
 {
@@ -361,35 +361,35 @@ void adi_precond( int msize, int nblocks, double *A, double *B, double *C, doubl
 
 
 
-double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
-{
-    double ddotprod = 0.0;
-    int iblock, m;
+// double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
+// {
+//     double ddotprod = 0.0;
+//     int iblock, m;
 
-#if defined ( USE_OACC ) || defined( USE_OMP_OL )
+// #if defined ( USE_OACC ) || defined( USE_OMP_OL )
 
-#if defined( USE_OACC )
-    #pragma acc parallel loop gang vector collapse(2) \
-                         reduction( + : ddotprod ) \
-                         copy( ddotprod ) \
-                         deviceptr( d_xvec, d_yvec )
-#elif defined( USE_OMP_OL )
-    #pragma omp target teams distribute parallel for simd collapse(2) \
-                         reduction( + : ddotprod ) \
-                         map( tofrom: ddotprod ) \
-                         is_device_ptr( d_xvec, d_yvec )
-#endif
-    for( iblock=0; iblock<nblocks; iblock++ ) {
-        for( m=0; m<msize; m++ ) {
-            ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
-        }
-    }
-#else
-    GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
-#endif
+// #if defined( USE_OACC )
+//     #pragma acc parallel loop gang vector collapse(2) \
+//                          reduction( + : ddotprod ) \
+//                          copy( ddotprod ) \
+//                          deviceptr( d_xvec, d_yvec )
+// #elif defined( USE_OMP_OL )
+//     #pragma omp target teams distribute parallel for simd collapse(2) \
+//                          reduction( + : ddotprod ) \
+//                          map( tofrom: ddotprod ) \
+//                          is_device_ptr( d_xvec, d_yvec )
+// #endif
+//     for( iblock=0; iblock<nblocks; iblock++ ) {
+//         for( m=0; m<msize; m++ ) {
+//             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
+//         }
+//     }
+// #else
+//     GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
+// #endif
 
-    return ddotprod;
-} // adi_dotprod
+//     return ddotprod;
+// } // adi_dotprod
 // double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
 // {
 //     double ddotprod = 0.0;
@@ -553,7 +553,7 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
    
         // for(int i = 0; i<msize; i++){if( isnan(device_rtilde[i]) ){printf("adi_solver_GPU.b y\n");break;}}
         // for(int i = 0; i<msize; i++){if( isnan(device_rvec[i]) ){printf("adi_solver_GPU.c bb\n");break;}}
-        rho = adi_dotprod_remote( msize, nblocks, device_rtilde, device_rvec );
+        rho = adi_dotprod( msize, nblocks, device_rtilde, device_rvec );
 
         if( k > 0 ) { // not the first iteration
 
@@ -582,7 +582,7 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 #endif
 
         // 17: \alpha = \rho_{i} / ( \tilde{r}^{T} * v )
-        rtilde_times_vvec = adi_dotprod_remote( msize, nblocks, device_rtilde, device_vvec );
+        rtilde_times_vvec = adi_dotprod( msize, nblocks, device_rtilde, device_vvec );
         alpha = rho / rtilde_times_vvec;
         m_alpha = -alpha;
 
@@ -615,8 +615,8 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 
 	
         // 25: \omega = ( t^{T} * s ) / ( t^{T} * t )
-        tvec_times_svec = adi_dotprod_remote( msize, nblocks, device_tvec, device_svec );
-        tvec_times_tvec = adi_dotprod_remote( msize, nblocks, device_tvec, device_tvec );
+        tvec_times_svec = adi_dotprod( msize, nblocks, device_tvec, device_svec );
+        tvec_times_tvec = adi_dotprod( msize, nblocks, device_tvec, device_tvec );
         omega = tvec_times_svec / tvec_times_tvec;
         m_omega = -omega;
 

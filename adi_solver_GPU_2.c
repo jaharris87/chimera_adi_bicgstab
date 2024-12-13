@@ -75,7 +75,7 @@
 
 
 //this one!??
-double adi_dotprod_remote( int msize, int nblocks, double *d_xvec, double *d_yvec )
+double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
 {
     double ddotprod = 0.0;
     int iblock, m;
