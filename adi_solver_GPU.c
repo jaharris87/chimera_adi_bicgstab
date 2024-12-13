@@ -361,52 +361,52 @@ void adi_precond( int msize, int nblocks, double *A, double *B, double *C, doubl
 
 
 
-// double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
-// {
-//     double ddotprod = 0.0;
-//     int iblock, m;
-
-// #if defined ( USE_OACC ) || defined( USE_OMP_OL )
-
-// #if defined( USE_OACC )
-//     #pragma acc parallel loop gang vector collapse(2) \
-//                          reduction( + : ddotprod ) \
-//                          copy( ddotprod ) \
-//                          deviceptr( d_xvec, d_yvec )
-// #elif defined( USE_OMP_OL )
-//     #pragma omp target teams distribute parallel for simd collapse(2) \
-//                          reduction( + : ddotprod ) \
-//                          map( tofrom: ddotprod ) \
-//                          is_device_ptr( d_xvec, d_yvec )
-// #endif
-//     for( iblock=0; iblock<nblocks; iblock++ ) {
-//         for( m=0; m<msize; m++ ) {
-//             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
-//         }
-//     }
-// #else
-//     GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
-// #endif
-
-//     return ddotprod;
-// } // adi_dotprod
 double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
 {
     double ddotprod = 0.0;
     int iblock, m;
 
+#if defined ( USE_OACC ) || defined( USE_OMP_OL )
+
+#if defined( USE_OACC )
+    #pragma acc parallel loop gang vector collapse(2) \
+                         reduction( + : ddotprod ) \
+                         copy( ddotprod ) \
+                         deviceptr( d_xvec, d_yvec )
+#elif defined( USE_OMP_OL )
     #pragma omp target teams distribute parallel for simd collapse(2) \
                          reduction( + : ddotprod ) \
                          map( tofrom: ddotprod ) \
                          is_device_ptr( d_xvec, d_yvec )
+#endif
     for( iblock=0; iblock<nblocks; iblock++ ) {
         for( m=0; m<msize; m++ ) {
             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
         }
     }
+#else
+    GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
+#endif
 
     return ddotprod;
 } // adi_dotprod
+// double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
+// {
+//     double ddotprod = 0.0;
+//     int iblock, m;
+
+//     #pragma omp target teams distribute parallel for simd collapse(2) \
+//                          reduction( + : ddotprod ) \
+//                          map( tofrom: ddotprod ) \
+//                          is_device_ptr( d_xvec, d_yvec )
+//     for( iblock=0; iblock<nblocks; iblock++ ) {
+//         for( m=0; m<msize; m++ ) {
+//             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
+//         }
+//     }
+
+//     return ddotprod;
+// } // adi_dotprod
 
 
 
