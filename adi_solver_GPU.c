@@ -1,6 +1,12 @@
 #include "chimera_gpu.h"
 #include "adi_gpu.h"
 
+//prototypes for partition
+// void setupPtrVecs(int nblocks, int msize, double **device_ALU_d, double **device_x1_d, double *device_ALU, double *device_x1);
+// void residual(int nblocks, int msize, double *device_dx, double *device_rtilde, double *device_pvec, double *device_rvec, double *device_xvec, double *rhs);
+// double adi_vnorm( int msize, int nblocks, double *d_xvec );
+double adi_dotprod_remote( int msize, int nblocks, double *d_xvec, double *d_yvec );
+
 void pre_adi_init( int nblocks, int msize )
 {
     int i, iblock;
@@ -18,8 +24,18 @@ void pre_adi_init( int nblocks, int msize )
     GPU_CALL( gpuMalloc( (void **)&device_linfo,    nblocks*sizeof(int) ) );
     host_linfo = (int *)malloc( nblocks*sizeof(int) );
 
-    magma_dset_pointer( device_ALU_d, device_ALU, msize, 0, 0, msize*msize, nblocks, magma_queue );
-    magma_dset_pointer( device_x1_d,  device_x1,  msize, 0, 0, msize,       nblocks, magma_queue );
+//    magma_dset_pointer( device_ALU_d, device_ALU, msize, 0, 0, msize*msize, nblocks, magma_queue );
+//    magma_dset_pointer( device_x1_d,  device_x1,  msize, 0, 0, msize,       nblocks, magma_queue );
+
+    //get rid of magma
+    #pragma omp target teams distribute parallel for \
+                        is_device_ptr( device_ALU_d, device_x1_d,device_ALU,device_x1)
+    for (int i=0; i<nblocks; i++){ device_ALU_d[i]=&device_ALU[i*msize*msize];
+                             device_x1_d[i]=&device_x1[i*msize]; }
+
+    //partition
+    // setupPtrVecs(nblocks,msize, device_ALU_d, device_x1_d, device_ALU, device_x1);
+
 
     GPU_CALL( gpuMalloc( (void **)&device_Bband,    msize*nblocks*sizeof(double) ) );
     GPU_CALL( gpuMalloc( (void **)&device_Cband,    msize*nblocks*sizeof(double) ) );
@@ -289,8 +305,18 @@ void adi_matvec( int msize, int nblocks, double *A, double *B, double *C, double
     // Do the B*x1 + C*x1 part
     GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, d_xhat, 1, device_dx_B, 1 ) );
     GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, d_xhat, 1, device_dx_C, 1 ) );
-    magmablas_dlascl2( MagmaFull, n, 1, &device_Bband[msize], device_dx_B, n, magma_queue, &linfo );
-    magmablas_dlascl2( MagmaFull, n, 1, device_Cband, &device_dx_C[msize], n, magma_queue, &linfo );
+    //magmablas_dlascl2( MagmaFull, n, 1, &device_Bband[msize], device_dx_B, n, magma_queue, &linfo );
+    // for (int i=0; i<n; i++)device_dx_B[i] *= device_Bband[msize + i];
+    // #pragma omp target teams distribute parallel for \
+                        //  is_device_ptr( device_dx_B, device_Bband)
+    //magmablas_dlascl2( MagmaFull, n, 1, device_Cband, &device_dx_C[msize], n, magma_queue, &linfo );
+    // for (int i=0; i<n; i++)device_dx_C[msize + i] *= device_Cband[i];
+#pragma omp target teams distribute parallel for \
+                         is_device_ptr( device_dx_B, device_Bband, device_dx_C, device_Cband)
+    for (int i=0; i<n; i++){ device_dx_B[i] = device_dx_B[i] * device_Bband[msize + i];
+                             device_dx_C[msize + i] = device_dx_C[msize + i] * device_Cband[i]; }
+
+
     GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, n, &d_one, device_dx_B, 1, &d_y[msize], 1 ) );
     GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, n, &d_one, &device_dx_C[msize], 1, d_y, 1 ) );
 } // adi_matvec
@@ -305,7 +331,9 @@ void adi_precond( int msize, int nblocks, double *A, double *B, double *C, doubl
     adi_dblock( msize, nblocks );
     
     // dx = (A+B+C)*x1
+    // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_x1[i]) ){printf("device_x1\n");abort();}}
     adi_matvec( msize, nblocks, A, B, C, device_x1, device_dx );
+
 
     // Calculate x-dx on the GPU
     GPUBLAS_CALL( gpublasDscal( gpublas_handle, msize*nblocks, &d_mone, device_dx, 1 ) );
@@ -319,35 +347,81 @@ void adi_precond( int msize, int nblocks, double *A, double *B, double *C, doubl
     GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, device_x1, 1, device_xhat, 1 ) );
 } // adi_precond
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
+// {
+//     double ddotprod = 0.0;
+//     int iblock, m;
+
+// #if defined ( USE_OACC ) || defined( USE_OMP_OL )
+
+// #if defined( USE_OACC )
+//     #pragma acc parallel loop gang vector collapse(2) \
+//                          reduction( + : ddotprod ) \
+//                          copy( ddotprod ) \
+//                          deviceptr( d_xvec, d_yvec )
+// #elif defined( USE_OMP_OL )
+//     #pragma omp target teams distribute parallel for simd collapse(2) \
+//                          reduction( + : ddotprod ) \
+//                          map( tofrom: ddotprod ) \
+//                          is_device_ptr( d_xvec, d_yvec )
+// #endif
+//     for( iblock=0; iblock<nblocks; iblock++ ) {
+//         for( m=0; m<msize; m++ ) {
+//             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
+//         }
+//     }
+// #else
+//     GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
+// #endif
+
+//     return ddotprod;
+// } // adi_dotprod
 double adi_dotprod( int msize, int nblocks, double *d_xvec, double *d_yvec )
 {
     double ddotprod = 0.0;
     int iblock, m;
 
-#if defined ( USE_OACC ) || defined( USE_OMP_OL )
-
-#if defined( USE_OACC )
-    #pragma acc parallel loop gang vector collapse(2) \
-                         reduction( + : ddotprod ) \
-                         copy( ddotprod ) \
-                         deviceptr( d_xvec, d_yvec )
-#elif defined( USE_OMP_OL )
     #pragma omp target teams distribute parallel for simd collapse(2) \
                          reduction( + : ddotprod ) \
                          map( tofrom: ddotprod ) \
                          is_device_ptr( d_xvec, d_yvec )
-#endif
     for( iblock=0; iblock<nblocks; iblock++ ) {
         for( m=0; m<msize; m++ ) {
             ddotprod += d_xvec[m+iblock*msize] * d_yvec[m+iblock*msize];
         }
     }
-#else
-    GPUBLAS_CALL( gpublasDdot( gpublas_handle, msize*nblocks, d_xvec, 1, d_yvec, 1, &ddotprod ) );
-#endif
 
     return ddotprod;
 } // adi_dotprod
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 double adi_vnorm( int msize, int nblocks, double *d_xvec )
 {
@@ -388,6 +462,8 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
     double rvec_norm0, rvec_norm, svec_norm;
     int iblock, k, m, n;
 
+        // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_vvec[i]) ){printf("adi_solver_GPU.c -a\n");break;}}
+
     adi_init( msize, nblocks, A, B, C );
 
     alpha = d_zero;
@@ -407,9 +483,16 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
                          deviceptr( device_dx, device_rtilde, \
                                     device_pvec, device_rvec, device_xvec )
 #elif defined( USE_OMP_OL )
+
+/*
+    #pragma omp target teams distribute parallel for simd
+    for(int i=0; i<1; i++)printf("test from gpu section\n");
+*/
+
     #pragma omp target teams distribute parallel for simd collapse(2) \
                        is_device_ptr( device_dx, device_rtilde, \
                                        device_pvec, device_rvec, device_xvec )
+// residual(nblocks, msize, device_dx, device_rtilde, device_pvec, device_rvec, device_xvec, rhs);
 #endif
     for( iblock=0; iblock<nblocks; iblock++ ) {
         for( m=0; m<msize; m++ ) {
@@ -420,10 +503,12 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 
             // 1: compute initial residual r_0 = b - A * x_0 (x_0 = 0)
             device_rvec[m+iblock*msize] = rhs[m+iblock*msize];
-
+// if( isnan(device_rvec[m+iblock*msize]) )printf("adi_solver_GPU.c a");
             // 2: Set p = r and \tilde{r} = r
             device_pvec[m+iblock*msize]   = device_rvec[m+iblock*msize];
+// if( isnan(device_pvec[m+iblock*msize]) )printf("adi_solver_GPU.c aa");
             device_rtilde[m+iblock*msize] = device_rvec[m+iblock*msize];
+// if( isnan(device_rtilde[m+iblock*msize]) )printf("adi_solver_GPU.c aaa");
 
         }
     }
@@ -454,6 +539,8 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 #endif
 
     rvec_norm0 = adi_vnorm( msize, nblocks, device_rvec );
+
+
 #ifdef ADI_VERBOSE
     printf( "rvec_norm0 = %12.5e\n", rvec_norm0 );
 #endif
@@ -463,7 +550,10 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
  
         // 4: \rho = \tilde{r}^{T} * r
         rhop = rho;
-        rho = adi_dotprod( msize, nblocks, device_rtilde, device_rvec );
+   
+        // for(int i = 0; i<msize; i++){if( isnan(device_rtilde[i]) ){printf("adi_solver_GPU.b y\n");break;}}
+        // for(int i = 0; i<msize; i++){if( isnan(device_rvec[i]) ){printf("adi_solver_GPU.c bb\n");break;}}
+        rho = adi_dotprod_remote( msize, nblocks, device_rtilde, device_rvec );
 
         if( k > 0 ) { // not the first iteration
 
@@ -471,6 +561,7 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
             beta = ( rho / rhop ) * ( alpha / omega );
             
             // 13: p = r + \beta * ( p - \omega * v )
+	    // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_vvec[i]) ){printf("device_vvec v\n");abort();}}
             GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &m_omega, device_vvec, 1, device_pvec, 1 ) );
             GPUBLAS_CALL( gpublasDscal( gpublas_handle, msize*nblocks, &beta, device_pvec, 1 ) );
             GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &d_one, device_rvec, 1, device_pvec, 1 ) );
@@ -478,25 +569,27 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 
         // 15: M * \hat{p} = p (apply preconditioners)
         GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, device_pvec, 1, device_phat, 1 ) );
+	// for(int i = 0; i<msize*nblocks; i++){if( isnan(device_phat[i]) ){printf("device_phat w\n");abort();}}    
         adi_precond( msize, nblocks, A, B, C, device_phat );
 
         // 16: v = A * \hat{p}
+	// for(int i = 0; i<msize*nblocks; i++){if( isnan(device_phat[i]) ){printf("device_phat w\n");abort();}}
         adi_matvec( msize, nblocks, A, B, C, device_phat, device_vvec );
-
+        // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_vvec[i]) ){printf("device_vvec ww\n");abort();}}
 #ifdef ADI_VERBOSE
         printf( "Iteration %2da, rho = %12.5e, vvec_norm = %12.5e, phat_norm = %12.5e\n",
                 k, rho, adi_vnorm( msize, nblocks, device_vvec ), adi_vnorm( msize, nblocks, device_phat ) );
 #endif
 
         // 17: \alpha = \rho_{i} / ( \tilde{r}^{T} * v )
-        rtilde_times_vvec = adi_dotprod( msize, nblocks, device_rtilde, device_vvec );
+        rtilde_times_vvec = adi_dotprod_remote( msize, nblocks, device_rtilde, device_vvec );
         alpha = rho / rtilde_times_vvec;
         m_alpha = -alpha;
 
         // 18: s = r - \alpha * v
         GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, device_rvec, 1, device_svec, 1 ) );
+        // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_vvec[i]) ){printf("device_vvec x\n");break;}}
         GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &m_alpha, device_vvec, 1, device_svec, 1 ) );
-
         // 20: check for convergence (norm of svec is small)
         svec_norm = adi_vnorm( msize, nblocks, device_svec );
 #ifdef ADI_VERBOSE
@@ -511,14 +604,19 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
 
         // 23: M * \hat{s} = r (apply preconditioners)
         GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, device_svec, 1, device_shat, 1 ) );
+	// for(int i = 0; i<msize*nblocks; i++){if( isnan(device_shat[i]) ){printf("device_shat w\n");abort();}}    
         adi_precond( msize, nblocks, A, B, C, device_shat );
 
         // 24: t = A * \hat{s}
+	// for(int i = 0; i<msize*nblocks; i++){if( isnan(device_shat[i]) ){printf("device_shat -y\n");abort();}}
         adi_matvec( msize, nblocks, A, B, C, device_shat, device_tvec );
+        // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_tvec[i]) ){printf("device_tvec -yy\n");abort();}}
 
+
+	
         // 25: \omega = ( t^{T} * s ) / ( t^{T} * t )
-        tvec_times_svec = adi_dotprod( msize, nblocks, device_tvec, device_svec );
-        tvec_times_tvec = adi_dotprod( msize, nblocks, device_tvec, device_tvec );
+        tvec_times_svec = adi_dotprod_remote( msize, nblocks, device_tvec, device_svec );
+        tvec_times_tvec = adi_dotprod_remote( msize, nblocks, device_tvec, device_tvec );
         omega = tvec_times_svec / tvec_times_tvec;
         m_omega = -omega;
 
@@ -526,10 +624,12 @@ void adi_bicgstab( int msize, int nblocks, double *A, double *B, double *C, doub
         // 27: r = s - \omega * t
         GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &alpha, device_phat, 1, device_xvec, 1 ) );
         GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &omega, device_shat, 1, device_xvec, 1 ) );
+        // for(int i = 0; i<msize*nblocks; i++){if( isnan(device_svec[i]) ){printf("adi_solver_GPU.c y\n");break;}}
         GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, device_svec, 1, device_rvec, 1 ) );
         GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, msize*nblocks, &m_omega, device_tvec, 1, device_rvec, 1 ) );
 
         // 28: check for convergence, continue if necessary
+        // for(int i = 0; i<msize; i++){if( isnan(device_rvec[i]) ){printf("adi_solver_GPU.c z\n");break;}}
         rvec_norm = adi_vnorm( msize, nblocks, device_rvec );
 #ifdef ADI_VERBOSE
         printf( "Iteration %2dc, rvec_norm = %12.5e, tvec_times_svec = %12.5e, tvec_times_tvec   = %12.5e\n",

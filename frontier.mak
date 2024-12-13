@@ -34,17 +34,17 @@ else
   endif
 endif
 
-MAGMA_PATH ?= ${OLCF_MAGMA_ROOT}
-ifneq (${MAGMA_PATH},)
-  INC_MAGMA = -I${MAGMA_PATH}/include
-  LIB_MAGMA = -L$(MAGMA_PATH)/lib -lmagma
-else
-  ifeq (${USE_MAGMA},TRUE)
-    $(error Cannot resolve MAGMA path. \
-            Load the MAGMA module---e.g. "module load magma"--- \
-            or define MAGMA_PATH variable for a valid MAGMA build.)
-  endif
-endif
+#MAGMA_PATH ?= ${OLCF_MAGMA_ROOT}
+#ifneq (${MAGMA_PATH},)
+#  INC_MAGMA = -I${MAGMA_PATH}/include
+#  LIB_MAGMA = -L$(MAGMA_PATH)/lib -lmagma
+#else
+#  ifeq (${USE_MAGMA},TRUE)
+#    $(error Cannot resolve MAGMA path. \
+#            Load the MAGMA module---e.g. "module load magma"--- \
+#            or define MAGMA_PATH variable for a valid MAGMA build.)
+#  endif
+#endif
 
 #----------------------------------------------------------------------------
 # Compiler and linker commands
@@ -53,6 +53,8 @@ endif
 FCOMP   = ftn
 CCOMP   = cc -x c++
 CPPCOMP = CC -std=c++11
+#CCOMP   = amdclang -ffast-math -x c++ -I/opt/cray/pe/mpich/8.1.28/ofi/crayclang/17.0/include -fopenmp -fopenmp-targets=amdgcn-amd-amdhsa -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx90a
+#CPPCOMP = amdclang -ffast-math -std=c++11 -I/opt/cray/pe/mpich/8.1.28/ofi/crayclang/17.0/include -fopenmp -fopenmp-targets=amdgcn-amd-amdhsa -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx90a
 LINK    = ftn
 
 #----------------------------------------------------------------------------
@@ -116,7 +118,7 @@ else ifeq ($(PE_ENV),CRAY)
     DEBUG_FLAGS   = -O0 -g
 
     # Fortran-specific flags
-    OPT_FFLAGS    = -G2 -hlist=adm
+    OPT_FFLAGS    = -G2 # -hlist=adm
     TEST_FFLAGS   =
     DEBUG_FFLAGS  = -Ktrap=fp
 

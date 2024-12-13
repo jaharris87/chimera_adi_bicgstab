@@ -23,8 +23,8 @@ ifeq (${USE_CUDA},TRUE)
   DEFINES += ${PP}USE_CUDA
 endif
 ifeq (${USE_HIP},TRUE)
-  INCLUDE += ${INC_ROCM} ${INC_MAGMA}
-  LIB     += ${LIB_ROCM} ${LIB_MAGMA}
+  INCLUDE += ${INC_ROCM}
+  LIB     += ${LIB_ROCM}
   DEFINES += ${PP}USE_HIP
 endif
 
@@ -52,11 +52,11 @@ CXXFLAGS  = ${CFLAGS} ${CXXSTD}
 OBJS = hip_module.o \
        hipblas_module.o \
        hipsparse_module.o \
-       magma_module.o \
        gpu_module.o \
        chimera_gpu.o \
        adi_c_module.o \
        adi_solver_GPU.o \
+       adi_solver_GPU_2.o \
        driver.o
 
 EXE = test
@@ -66,6 +66,9 @@ EXE = test
 
 %.o : %.c
 	${CCOMP} ${CFLAGS} ${INCLUDE} ${DEFINES} -c $< -o $@
+
+adi_solver_GPU_2.o: adi_solver_GPU_2.c
+	${CCOMP} -fno-cray ${CFLAGS} ${INCLUDE} ${DEFINES} -c $< -o $@
 
 %.o : %.cpp
 	${CXXCOMP} ${CXXFLAGS} ${INCLUDE} ${DEFINES} -c $< -o $@
@@ -90,5 +93,5 @@ ${EXE} : ${OBJS}
 clean :
 	rm -f *.o *.mod *.lst *.i *.cg *.opt
 
-gpu_module.o : magma_module.o hipsparse_module.o hip_module.o hipblas_module.o chimera_gpu.o
+gpu_module.o : hipsparse_module.o hip_module.o hipblas_module.o chimera_gpu.o
 driver.o : adi_c_module.o gpu_module.o

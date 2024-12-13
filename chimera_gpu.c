@@ -10,15 +10,15 @@ gpusparseHandle_t gpusparse_handle;
 int mygpusparse_handle;
 int ngpusparse_handle;
 
-magma_queue_t *magma_queue_array;
-magma_queue_t magma_queue;
-int mymagma_queue;
-int nmagma_queue;
+// magma_queue_t *magma_queue_array;
+// magma_queue_t magma_queue;
+// int mymagma_queue;
+// int nmagma_queue;
 
 int deviceCount;
 int mydevice;
 int myid;
-magma_device_t magma_device;
+// magma_device_t magma_device;
 
 gpuStream_t *streamArray;
 gpuStream_t stream;
@@ -29,11 +29,10 @@ gpuEvent_t *eventArray;
 int nevent;
 
 void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
-                       int *ngpublas_handle_f, int *ngpusparse_handle_f, int *nmagma_queue_f, 
+                       int *ngpublas_handle_f, int *ngpusparse_handle_f, 
                        int *nstream_f, int* nevent_f,
                        gpublasHandle_t **gpublas_handle_array_f,
                        gpusparseHandle_t **gpusparse_handle_array_f,
-                       magma_queue_t **magma_queue_array_f,
                        gpuStream_t **streamArray_f,
                        gpuEvent_t **eventArray_f )
 {
@@ -43,12 +42,12 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
    GPU_CALL( gpuGetDeviceCount( &deviceCount ) );
    mydevice = myid % deviceCount;
    GPU_CALL( gpuSetDevice( mydevice ) );
-   magma_getdevice( &magma_device );
+  //  magma_getdevice( &magma_device );
 
    nstream = 1;
    ngpublas_handle = nstream;
    ngpusparse_handle = nstream;
-   nmagma_queue = nstream;
+  //  nmagma_queue = nstream;
 
    gpublas_handle_array = (gpublasHandle_t *)malloc( ngpublas_handle*sizeof(gpublasHandle_t *) );
    for( i=0; i<ngpublas_handle; i++ ) {
@@ -90,14 +89,16 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
       GPUSPARSE_CALL( gpusparseSetStream( gpusparse_handle_array[i], streamArray[i] ) );
    }
 
-   MAGMA_CALL( magma_init() );
 
-   magma_queue_array = (magma_queue_t *)malloc( nmagma_queue*sizeof(magma_queue_t *) );
-   for( i=0; i<nmagma_queue; i++ ) {
-      magma_queue_create_from_gpu( magma_device, streamArray[i], 
-                                   gpublas_handle_array[i], gpusparse_handle_array[i], 
-                                   &magma_queue_array[i] );
-   }
+//   MAGMA_CALL( magma_init() );
+
+  //  magma_queue_array = (magma_queue_t *)malloc( nmagma_queue*sizeof(magma_queue_t *) );
+  //  for( i=0; i<nmagma_queue; i++ ) {
+      // magma_queue_create_from_gpu( magma_device, streamArray[i], 
+                                  //  gpublas_handle_array[i], gpusparse_handle_array[i], 
+                                  //  &magma_queue_array[i] );
+  //  }
+
 
 #pragma omp parallel default( shared )
    {
@@ -105,17 +106,17 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
       mystream = omp_get_thread_num() % nstream;
       mygpublas_handle = omp_get_thread_num() % ngpublas_handle;
       mygpusparse_handle = omp_get_thread_num() % ngpusparse_handle;
-      mymagma_queue = omp_get_thread_num() % nmagma_queue;
+      // mymagma_queue = omp_get_thread_num() % nmagma_queue;
 #else
       mystream = 0;
       mygpublas_handle = 0;
       mygpusparse_handle = 0;
-      mymagma_queue = 0;
+      // mymagma_queue = 0;
 #endif
       stream = streamArray[mystream];
       gpublas_handle = gpublas_handle_array[mygpublas_handle];
       gpusparse_handle = gpusparse_handle_array[mygpusparse_handle];
-      magma_queue = magma_queue_array[mymagma_queue];
+      // magma_queue = magma_queue_array[mymagma_queue];
    }
 
    // copy pointers to fortran copies
@@ -123,12 +124,12 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
    *deviceCount_f = deviceCount;
    *ngpublas_handle_f = ngpublas_handle;
    *ngpusparse_handle_f = ngpusparse_handle;
-   *nmagma_queue_f = nmagma_queue;
+  //  *nmagma_queue_f = nmagma_queue;
    *nstream_f = nstream;
    *nevent_f = nevent;
    *gpublas_handle_array_f = gpublas_handle_array;
    *gpusparse_handle_array_f = gpusparse_handle_array;
-   *magma_queue_array_f = magma_queue_array;
+  //  *magma_queue_array_f = magma_queue_array;
    *streamArray_f = streamArray;
    *eventArray_f = eventArray;
 }
@@ -157,12 +158,13 @@ void finalize_gpu_c()
    }
    free( eventArray );
 
-   for( i=0; i<nmagma_queue; i++ ) {
-      magma_queue_destroy( magma_queue_array[i] );
-   }
-   free( magma_queue_array );
+  //  for( i=0; i<nmagma_queue; i++ ) {
+  //     magma_queue_destroy( magma_queue_array[i] );
+  //  }
+  //  free( magma_queue_array );
 
-   MAGMA_CALL( magma_finalize() );
+//   MAGMA_CALL( magma_finalize() );
+
 
 }
 
