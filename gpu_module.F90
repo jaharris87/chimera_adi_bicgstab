@@ -24,8 +24,8 @@ MODULE gpu_module
   INTERFACE
 
     SUBROUTINE initialize_gpu_c( mydevice, deviceCount, &
-        & nhipblas_handle, nhipsparse_handle, nmagma_queue, nstream, nevent,  &
-        & hipblas_handle_array_cptr, hipsparse_handle_array_cptr, magma_queue_array_cptr, &
+        & nhipblas_handle, nhipsparse_handle, nstream, nevent,  &
+        & hipblas_handle_array_cptr, hipsparse_handle_array_cptr, &
         & streamArray_cptr, eventArray_cptr ) &
         & BIND(C, NAME="initialize_gpu_c")
       USE, INTRINSIC :: ISO_C_BINDING
@@ -33,12 +33,12 @@ MODULE gpu_module
       INTEGER(C_INT) :: deviceCount
       INTEGER(C_INT) :: nhipblas_handle
       INTEGER(C_INT) :: nhipsparse_handle
-      INTEGER(C_INT) :: nmagma_queue
+      ! INTEGER(C_INT) :: nmagma_queue
       INTEGER(C_INT) :: nstream
       INTEGER(C_INT) :: nevent
       TYPE(C_PTR) :: hipblas_handle_array_cptr
       TYPE(C_PTR) :: hipsparse_handle_array_cptr
-      TYPE(C_PTR) :: magma_queue_array_cptr
+      ! TYPE(C_PTR) :: magma_queue_array_cptr
       TYPE(C_PTR) :: streamArray_cptr
       TYPE(C_PTR) :: eventArray_cptr
     END SUBROUTINE initialize_gpu_c
@@ -88,7 +88,7 @@ CONTAINS
 #if defined( USE_OMP ) || defined( USE_OMP_OL )
     USE omp_lib
 #endif
-    USE magma_module
+    ! USE magma_module
 
     IMPLICIT none
 
@@ -96,13 +96,13 @@ CONTAINS
     INTEGER :: mythread
 
     CALL initialize_gpu_c( mydevice, deviceCount, &
-      & ngpublas_handle, ngpusparse_handle, nmagma_queue, nstream, nevent,  &
-      & gpublas_handle_array_cptr, gpusparse_handle_array_cptr, magma_queue_array_cptr, &
+      & ngpublas_handle, ngpusparse_handle, nstream, nevent,  &
+      & gpublas_handle_array_cptr, gpusparse_handle_array_cptr, &
       & streamArray_cptr, eventArray_cptr )
 
     CALL C_F_POINTER( gpublas_handle_array_cptr, gpublas_handle_array, (/ ngpublas_handle /) )
     CALL C_F_POINTER( gpusparse_handle_array_cptr, gpusparse_handle_array, (/ ngpusparse_handle /) )
-    CALL C_F_POINTER( magma_queue_array_cptr, magma_queue_array, (/ nmagma_queue /) )
+    ! CALL C_F_POINTER( magma_queue_array_cptr, magma_queue_array, (/ nmagma_queue /) )
     CALL C_F_POINTER( streamArray_cptr, streamArray, (/ nstream /) )
     CALL C_F_POINTER( eventArray_cptr, eventArray, (/ nevent /) )
 
@@ -117,8 +117,8 @@ CONTAINS
     mygpusparse_handle = MOD( mythread, ngpusparse_handle ) + 1
     gpusparse_handle = gpusparse_handle_array(mygpusparse_handle)
 
-    mymagma_queue = MOD( mythread, nmagma_queue ) + 1
-    magma_queue = magma_queue_array(mymagma_queue)
+    ! mymagma_queue = MOD( mythread, nmagma_queue ) + 1
+    ! magma_queue = magma_queue_array(mymagma_queue)
 
     mystream = MOD( mythread, nstream ) + 1
     stream = streamArray(mystream)
