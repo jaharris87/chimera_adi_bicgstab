@@ -23,7 +23,7 @@
 #include "chimera_hip.h"
 #endif
 
-// #include <magma_v2.h>
+#include <magma_v2.h>
 //#include <magma_dbatched.h>
 //#include <magmablas_d.h>
 
@@ -117,26 +117,27 @@ extern int mystream;
 extern gpuEvent_t *eventArray;
 extern int nevent;
 
-// extern magma_queue_t *magma_queue_array;
-// extern magma_queue_t magma_queue;
-// extern int mymagma_queue;
-// extern int nmagma_queue;
+extern magma_queue_t *magma_queue_array;
+extern magma_queue_t magma_queue;
+extern int mymagma_queue;
+extern int nmagma_queue;
 //#pragma omp threadprivate( magma_queue, mymagma_queue )
 
 extern int deviceCount;
 extern int mydevice;
 extern int myid;
-// extern magma_device_t magma_device;
+extern magma_device_t magma_device;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
-                       int *ngpublas_handle_f, int *ngpusparse_handle_f,
+                       int *ngpublas_handle_f, int *ngpusparse_handle_f, int *nmagma_queue_f, 
                        int *nstream_f, int* nevent_f,
                        gpublasHandle_t **gpublas_handle_array_f,
                        gpusparseHandle_t **gpusparse_handle_array_f,
+                       magma_queue_t **magma_queue_array_f,
                        gpuStream_t **streamArray_f,
                        gpuEvent_t **eventArray_f );
 
