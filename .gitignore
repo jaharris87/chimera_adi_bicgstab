@@ -1,0 +1,20 @@
+# compiler output
+*.mod
+*.o
+*.i
+*.cg
+*.lst
+*.ptx
+*.opt
+*.dSYM
+
+# executables
+test
+
+# misc
+.DS_Store
+*.bak
+*.tgz
+*.tar
+*.out
+
