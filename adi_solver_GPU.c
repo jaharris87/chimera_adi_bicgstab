@@ -5,8 +5,8 @@ void pre_adi_init( int nblocks, int msize )
 {
     int i, iblock;
 
-    GPU_CALL( gpuMalloc( (void **)&device_ALU_d,      nblocks*sizeof(*device_ALU_d) ) );
-    GPU_CALL( gpuMalloc( (void **)&device_x1_d,       nblocks*sizeof(*device_x1_d) ) );
+    //GPU_CALL( gpuMalloc( (void **)&device_ALU_d,      nblocks*sizeof(*device_ALU_d) ) );
+    //GPU_CALL( gpuMalloc( (void **)&device_x1_d,       nblocks*sizeof(*device_x1_d) ) );
 
     GPU_CALL( gpuMalloc( (void **)&device_A,        msize*msize*nblocks*sizeof(double) ) );
     GPU_CALL( gpuMalloc( (void **)&device_ALU,      msize*msize*nblocks*sizeof(double) ) );
@@ -18,8 +18,8 @@ void pre_adi_init( int nblocks, int msize )
     GPU_CALL( gpuMalloc( (void **)&device_linfo,    nblocks*sizeof(int) ) );
     host_linfo = (int *)malloc( nblocks*sizeof(int) );
 
-    magma_dset_pointer( device_ALU_d, device_ALU, msize, 0, 0, msize*msize, nblocks, magma_queue );
-    magma_dset_pointer( device_x1_d,  device_x1,  msize, 0, 0, msize,       nblocks, magma_queue );
+    //magma_dset_pointer( device_ALU_d, device_ALU, msize, 0, 0, msize*msize, nblocks, magma_queue );
+    //magma_dset_pointer( device_x1_d,  device_x1,  msize, 0, 0, msize,       nblocks, magma_queue );
 
     GPU_CALL( gpuMalloc( (void **)&device_Bband,    msize*nblocks*sizeof(double) ) );
     GPU_CALL( gpuMalloc( (void **)&device_Cband,    msize*nblocks*sizeof(double) ) );
@@ -62,8 +62,8 @@ void pre_adi_init( int nblocks, int msize )
 
 void adi_cleanup()
 {
-    GPU_CALL( gpuFree( device_ALU_d ) );
-    GPU_CALL( gpuFree( device_x1_d ) );
+    //GPU_CALL( gpuFree( device_ALU_d ) );
+    //GPU_CALL( gpuFree( device_x1_d ) );
 
     GPU_CALL( gpuFree( device_A ) );
     GPU_CALL( gpuFree( device_ALU ) );
@@ -220,11 +220,15 @@ void adi_init( int msize, int nblocks, double *A, double *B, double *C )
      * perform LU factorization of dense blocks *
      *------------------------------------------*/
 
-    GPUBLAS_CALL( gpublasDgetrfBatched( gpublas_handle, msize,
-                                        device_ALU_d, msize,
-                                        device_ALU_ipiv,
-                                        device_linfo,
-                                        nblocks ) );
+    GPUBLAS_CALL( gpublasDgetrfStridedBatched( gpublas_handle, msize,
+                                               device_ALU, msize, msize*msize,
+                                               device_ALU_ipiv, msize,
+                                               device_linfo, nblocks ) );
+    //GPUBLAS_CALL( gpublasDgetrfBatched( gpublas_handle, msize,
+    //                                    device_ALU_d, msize,
+    //                                    device_ALU_ipiv,
+    //                                    device_linfo,
+    //                                    nblocks ) );
 } // adi_init
 
 void adi_dblock( int msize, int nblocks )
@@ -236,9 +240,9 @@ void adi_dblock( int msize, int nblocks )
                                        msize, 1, device_ALU_d, msize, device_ALU_ipiv, 
                                        device_x1_d, msize, host_linfo, nblocks ) );
 #elif defined( USE_HIP )
-    GPUBLAS_CALL( hipblasDgetrsBatched( gpublas_handle, GPUBLAS_OP_N, 
-                                        msize, 1, device_ALU_d, msize, device_ALU_ipiv, 
-                                        device_x1_d, msize, host_linfo, nblocks ) );
+    GPUBLAS_CALL( hipblasDgetrsStridedBatched( gpublas_handle, GPUBLAS_OP_N, 
+                                        msize, 1, device_ALU, msize, msize*msize, device_ALU_ipiv, 
+                                        msize, device_x1, msize, msize, host_linfo, nblocks ) );
 #endif
 
 } // adi_dblock

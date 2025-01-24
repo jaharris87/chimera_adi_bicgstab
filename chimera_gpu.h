@@ -54,6 +54,7 @@
 typedef cublasHandle_t    gpublasHandle_t;
 typedef cublasStatus_t    gpublasStatus_t;
 typedef cublasOperation_t gpublasOperation_t;
+typedef long long int     gpublasStride;
 #define GPUBLAS_OP_N         CUBLAS_OP_N
 #define GPUBLAS_OP_T         CUBLAS_OP_T
 #define GPUBLAS_OP_C         CUBLAS_OP_C
@@ -81,6 +82,7 @@ typedef cudaDeviceProp    gpuDeviceProp;
 typedef hipblasHandle_t    gpublasHandle_t;
 typedef hipblasStatus_t    gpublasStatus_t;
 typedef hipblasOperation_t gpublasOperation_t;
+typedef hipblasStride      gpublasStride;
 #define GPUBLAS_OP_N         HIPBLAS_OP_N
 #define GPUBLAS_OP_T         HIPBLAS_OP_T
 #define GPUBLAS_OP_C         HIPBLAS_OP_C
@@ -232,6 +234,17 @@ gpublasStatus_t gpublasDgetrfBatched
     int *info,
     int batchSize );
 
+gpublasStatus_t gpublasDgetrfStridedBatched
+  ( gpublasHandle_t handle,
+    int n, 
+    double *A,
+    int lda,
+    gpublasStride strideA,
+    int *P,
+    gpublasStride strideP,
+    int *info,
+    int batchSize );
+
 gpublasStatus_t gpublasDgetrsBatched
   ( gpublasHandle_t handle, 
     gpublasOperation_t trans, 
@@ -242,6 +255,22 @@ gpublasStatus_t gpublasDgetrsBatched
     const int *devIpiv, 
     double *const B[], 
     int ldb, 
+    int *info,
+    int batchSize );
+
+gpublasStatus_t gpublasDgetrsStridedBatched
+  ( gpublasHandle_t handle, 
+    gpublasOperation_t trans, 
+    int n, 
+    int nrhs, 
+    double *A, 
+    int lda, 
+    gpublasStride strideA,
+    const int *devIpiv, 
+    gpublasStride strideP,
+    double *B, 
+    int ldb, 
+    gpublasStride strideB,
     int *info,
     int batchSize );
     

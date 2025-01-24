@@ -463,6 +463,28 @@ gpublasStatus_t gpublasDgetrfBatched
 #endif
 }
 
+gpublasStatus_t gpublasDgetrfStridedBatched
+  ( gpublasHandle_t handle,
+    int n, 
+    double *A,
+    int lda,
+    gpublasStride strideA,
+    int *P,
+    gpublasStride strideP,
+    int *info,
+    int batchSize )
+{
+#if defined( USE_CUDA )
+  return CUBLAS_STATUS_EXECUTION_FAILED;
+#elif defined( USE_HIP )
+  gpublasStatus_t err = hipblasDgetrfStridedBatched( handle, n, A, lda, strideA, P, strideP, info, batchSize );
+  GPU_CALL( gpuStreamSynchronize( streamArray[0] ) );
+  return err;
+#else
+  return 0;
+#endif
+}
+
 gpublasStatus_t gpublasDgetrsBatched
   ( gpublasHandle_t handle, 
     const gpublasOperation_t trans, 
@@ -480,6 +502,33 @@ gpublasStatus_t gpublasDgetrsBatched
   return cublasDgetrsBatched( handle, trans, n, nrhs, A, lda, devIpiv, B, ldb, info, batchSize );
 #elif defined( USE_HIP )
   gpublasStatus_t err = hipblasDgetrsBatched( handle, trans, n, nrhs, A, lda, devIpiv, B, ldb, info, batchSize );
+  GPU_CALL( gpuStreamSynchronize( streamArray[0] ) );
+  return err;
+#else
+  return 0;
+#endif
+}
+
+gpublasStatus_t gpublasDgetrsStridedBatched
+  ( gpublasHandle_t handle, 
+    const gpublasOperation_t trans, 
+    const int n, 
+    const int nrhs, 
+    double *A, 
+    const int lda, 
+    gpublasStride strideA,
+    const int *devIpiv, 
+    gpublasStride strideP,
+    double *B, 
+    const int ldb, 
+    gpublasStride strideB,
+    int *info,
+    const int batchSize )
+{
+#if defined( USE_CUDA )
+  return CUBLAS_STATUS_EXECUTION_FAILED;
+#elif defined( USE_HIP )
+  gpublasStatus_t err = hipblasDgetrsStridedBatched( handle, trans, n, nrhs, A, lda, strideA, devIpiv, strideP, B, ldb, strideB, info, batchSize );
   GPU_CALL( gpuStreamSynchronize( streamArray[0] ) );
   return err;
 #else
