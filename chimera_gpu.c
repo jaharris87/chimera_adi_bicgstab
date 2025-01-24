@@ -176,7 +176,14 @@ void finalize_gpu_c()
 gpuError_t gpuMalloc
   ( void **devPtr, size_t size )
 {
-#if defined( USE_CUDA )
+#if defined( USE_OMP_OL )
+  int err = 0;
+  *devPtr = omp_target_alloc( size, omp_get_default_device() );
+  if( *devPtr == NULL ) {
+    err = -1;
+  }
+  return (gpuError_t)err;
+#elif defined( USE_CUDA )
   return cudaMalloc( devPtr, size );
 #elif defined( USE_HIP )
   return hipMalloc( devPtr, size );
@@ -200,7 +207,14 @@ gpuError_t gpuHostAlloc
 gpuError_t gpuFree
   ( void *devPtr )
 {
-#if defined( USE_CUDA )
+#if defined( USE_OMP_OL )
+  int err = -1;
+  if( devPtr != NULL ) {
+    omp_target_free( devPtr, omp_get_default_device() );
+    err = 0;
+  }
+  return (gpuError_t)err;
+#elif defined( USE_CUDA )
   return cudaFree( devPtr );
 #elif defined( USE_HIP )
   return hipFree( devPtr );
