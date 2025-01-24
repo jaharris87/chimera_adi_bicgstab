@@ -235,25 +235,25 @@ gpublasStatus_t gpublasDcopy
 
 gpublasStatus_t gpublasDgetrfBatched
   ( gpublasHandle_t handle,
-    int n, 
+    const int n,
     double *const A[],
-    int lda,
+    const int lda,
     int *P,
     int *info,
-    int batchSize );
+    const int batchSize );
 
 gpublasStatus_t gpublasDgetrsBatched
   ( gpublasHandle_t handle, 
     gpublasOperation_t trans, 
-    int n, 
-    int nrhs, 
-    const double *const A[], 
-    int lda, 
+    const int n,
+    const int nrhs,
+    double *const A[],
+    const int lda,
     const int *devIpiv, 
     double *const B[], 
-    int ldb, 
+    const int ldb,
     int *info,
-    int batchSize );
+    const int batchSize );
     
 gpublasStatus_t gpublasDgeam 
   ( gpublasHandle_t handle,

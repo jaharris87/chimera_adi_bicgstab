@@ -452,12 +452,12 @@ gpublasStatus_t gpublasDcopy
 
 gpublasStatus_t gpublasDgetrfBatched
   ( gpublasHandle_t handle,
-    int n, 
+    const int n,
     double *const A[],
-    int lda,
+    const int lda,
     int *P,
     int *info,
-    int batchSize )
+    const int batchSize )
 {
 #if defined( USE_CUDA )
   return cublasDgetrfBatched( handle, n, A, lda, P, info, batchSize );
