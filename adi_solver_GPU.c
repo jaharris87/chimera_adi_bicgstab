@@ -18,8 +18,22 @@ void pre_adi_init( int nblocks, int msize )
     GPU_CALL( gpuMalloc( (void **)&device_linfo,    nblocks*sizeof(int) ) );
     host_linfo = (int *)malloc( nblocks*sizeof(int) );
 
+#if defined ( USE_OACC ) || defined( USE_OMP_OL )
+#if defined( USE_OACC )
+    #pragma acc parallel loop gang vector \
+                         deviceptr( device_ALU_d, device_x1_d, device_ALU, device_x1 )
+#elif defined( USE_OMP_OL )
+    #pragma omp target teams distribute parallel for simd \
+                         is_device_ptr( device_ALU_d, device_x1_d, device_ALU, device_x1 )
+#endif
+    for( iblock=0; iblock<nblocks; iblock++ ) {
+      device_ALU_d[iblock] = &device_ALU[iblock*msize*msize];
+      device_x1_d[iblock]  = &device_x1[iblock*msize];
+    }
+#else
     magma_dset_pointer( device_ALU_d, device_ALU, msize, 0, 0, msize*msize, nblocks, magma_queue );
     magma_dset_pointer( device_x1_d,  device_x1,  msize, 0, 0, msize,       nblocks, magma_queue );
+#endif
 
     GPU_CALL( gpuMalloc( (void **)&device_Bband,    msize*nblocks*sizeof(double) ) );
     GPU_CALL( gpuMalloc( (void **)&device_Cband,    msize*nblocks*sizeof(double) ) );
@@ -289,8 +303,22 @@ void adi_matvec( int msize, int nblocks, double *A, double *B, double *C, double
     // Do the B*x1 + C*x1 part
     GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, d_xhat, 1, device_dx_B, 1 ) );
     GPUBLAS_CALL( gpublasDcopy( gpublas_handle, msize*nblocks, d_xhat, 1, device_dx_C, 1 ) );
+#if defined ( USE_OACC ) || defined( USE_OMP_OL )
+#if defined( USE_OACC )
+    #pragma acc parallel loop gang vector \
+                         deviceptr( device_dx_B, device_Bband, device_dx_C, device_Cband )
+#elif defined( USE_OMP_OL )
+    #pragma omp target teams distribute parallel for simd \
+                         is_device_ptr( device_dx_B, device_Bband, device_dx_C, device_Cband )
+#endif
+    for( m=0; m<n; m++ ) {
+      device_dx_B[m]       = device_dx_B[m]       * device_Bband[msize+m];
+      device_dx_C[msize+m] = device_dx_C[msize+m] * device_Cband[m];
+    }
+#else
     magmablas_dlascl2( MagmaFull, n, 1, &device_Bband[msize], device_dx_B, n, magma_queue, &linfo );
     magmablas_dlascl2( MagmaFull, n, 1, device_Cband, &device_dx_C[msize], n, magma_queue, &linfo );
+#endif
     GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, n, &d_one, device_dx_B, 1, &d_y[msize], 1 ) );
     GPUBLAS_CALL( gpublasDaxpy( gpublas_handle, n, &d_one, &device_dx_C[msize], 1, d_y, 1 ) );
 } // adi_matvec

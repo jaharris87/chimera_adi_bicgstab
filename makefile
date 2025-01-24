@@ -23,9 +23,15 @@ ifeq (${USE_CUDA},TRUE)
   DEFINES += ${PP}USE_CUDA
 endif
 ifeq (${USE_HIP},TRUE)
-  INCLUDE += ${INC_ROCM} ${INC_MAGMA}
-  LIB     += ${LIB_ROCM} ${LIB_MAGMA}
   DEFINES += ${PP}USE_HIP
+  INCLUDE += ${INC_ROCM}
+  LIB     += ${LIB_ROCM}
+ifeq (${USE_OMP_OL},FALSE)
+ifeq (${USE_OACC},FALSE)
+  INCLUDE += ${INC_MAGMA}
+  LIB     += ${LIB_MAGMA}
+endif
+endif
 endif
 
 ifeq (${USE_OMP},TRUE)
@@ -52,7 +58,6 @@ CXXFLAGS  = ${CFLAGS} ${CXXSTD}
 OBJS = hip_module.o \
        hipblas_module.o \
        hipsparse_module.o \
-       magma_module.o \
        gpu_module.o \
        chimera_gpu.o \
        adi_c_module.o \
@@ -90,5 +95,5 @@ ${EXE} : ${OBJS}
 clean :
 	rm -f *.o *.mod *.lst *.i *.cg *.opt
 
-gpu_module.o : magma_module.o hipsparse_module.o hip_module.o hipblas_module.o chimera_gpu.o
+gpu_module.o : hipsparse_module.o hip_module.o hipblas_module.o chimera_gpu.o
 driver.o : adi_c_module.o gpu_module.o

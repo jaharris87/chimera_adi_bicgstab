@@ -43,7 +43,11 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
    GPU_CALL( gpuGetDeviceCount( &deviceCount ) );
    mydevice = myid % deviceCount;
    GPU_CALL( gpuSetDevice( mydevice ) );
+#if defined ( USE_OACC ) || defined( USE_OMP_OL )
+   magma_device = mydevice;
+#else
    magma_getdevice( &magma_device );
+#endif
 
    nstream = 1;
    ngpublas_handle = nstream;
@@ -90,14 +94,16 @@ void initialize_gpu_c( int *mydevice_f, int *deviceCount_f,
       GPUSPARSE_CALL( gpusparseSetStream( gpusparse_handle_array[i], streamArray[i] ) );
    }
 
+   magma_queue_array = (magma_queue_t *)malloc( nmagma_queue*sizeof(magma_queue_t *) );
+#if !defined ( USE_OACC ) && !defined( USE_OMP_OL )
    MAGMA_CALL( magma_init() );
 
-   magma_queue_array = (magma_queue_t *)malloc( nmagma_queue*sizeof(magma_queue_t *) );
    for( i=0; i<nmagma_queue; i++ ) {
       magma_queue_create_from_gpu( magma_device, streamArray[i], 
                                    gpublas_handle_array[i], gpusparse_handle_array[i], 
                                    &magma_queue_array[i] );
    }
+#endif
 
 #pragma omp parallel default( shared )
    {
@@ -157,12 +163,13 @@ void finalize_gpu_c()
    }
    free( eventArray );
 
+#if !defined ( USE_OACC ) && !defined( USE_OMP_OL )
    for( i=0; i<nmagma_queue; i++ ) {
       magma_queue_destroy( magma_queue_array[i] );
    }
-   free( magma_queue_array );
-
    MAGMA_CALL( magma_finalize() );
+#endif
+   free( magma_queue_array );
 
 }
 

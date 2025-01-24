@@ -23,9 +23,19 @@
 #include "chimera_hip.h"
 #endif
 
+#if !defined ( USE_OACC ) && !defined( USE_OMP_OL )
 #include <magma_v2.h>
 //#include <magma_dbatched.h>
 //#include <magmablas_d.h>
+#else
+#define MAGMA_SUCCESS 0
+
+typedef int magma_int_t;
+typedef magma_int_t magma_device_t;
+
+struct magma_queue;
+typedef struct magma_queue* magma_queue_t;
+#endif
 
 #define MAX(a, b) ((a >= b) ? a : b)
 #define MIN(a, b) ((a <= b) ? a : b)

@@ -88,12 +88,14 @@ CONTAINS
 #if defined( USE_OMP ) || defined( USE_OMP_OL )
     USE omp_lib
 #endif
-    USE magma_module
 
     IMPLICIT none
 
     ! Local variables
     INTEGER :: mythread
+    INTEGER :: nmagma_queue
+    TYPE(C_PTR) :: magma_queue_array_cptr
+    TYPE(C_PTR), POINTER :: magma_queue_array(:)
 
     CALL initialize_gpu_c( mydevice, deviceCount, &
       & ngpublas_handle, ngpusparse_handle, nmagma_queue, nstream, nevent,  &
@@ -102,7 +104,6 @@ CONTAINS
 
     CALL C_F_POINTER( gpublas_handle_array_cptr, gpublas_handle_array, (/ ngpublas_handle /) )
     CALL C_F_POINTER( gpusparse_handle_array_cptr, gpusparse_handle_array, (/ ngpusparse_handle /) )
-    CALL C_F_POINTER( magma_queue_array_cptr, magma_queue_array, (/ nmagma_queue /) )
     CALL C_F_POINTER( streamArray_cptr, streamArray, (/ nstream /) )
     CALL C_F_POINTER( eventArray_cptr, eventArray, (/ nevent /) )
 
@@ -116,9 +117,6 @@ CONTAINS
 
     mygpusparse_handle = MOD( mythread, ngpusparse_handle ) + 1
     gpusparse_handle = gpusparse_handle_array(mygpusparse_handle)
-
-    mymagma_queue = MOD( mythread, nmagma_queue ) + 1
-    magma_queue = magma_queue_array(mymagma_queue)
 
     mystream = MOD( mythread, nstream ) + 1
     stream = streamArray(mystream)
